@@ -213,18 +213,21 @@ class Example(QtWidgets.QMainWindow):
         self.show()
 
     def send(self, arg):
-        text = self.lineEdit.text()
-        encrypted = encode_function(text, *self.encode_send)
-        print(encrypted)
-        self.sock_send.send(bytes(encrypted + '\n', encoding='UTF-8'))
-        self.lineEdit.setText('')
+        try:
+            text = self.lineEdit.text()
+            encrypted = encode_function(text, *self.encode_send)
+            print(encrypted)
+            self.sock_send.send(bytes(encrypted + '\n', encoding='UTF-8'))
+            self.lineEdit.setText('')
+        except AttributeError:
+            pass
 
     def update_messages(self, arg):
         string = ''
         while True:
             try:
                 data = self.conn.recv(1024)
-            except BlockingIOError:
+            except BlockingIOError and AttributeError:
                 break
             string += str(data)[2:-1]
         for i in string.split('\\n'):
@@ -266,6 +269,10 @@ class Example(QtWidgets.QMainWindow):
                     break
                 string += str(data)[2:-1]
             self.encode_send = tuple(map(int, string[1:-1].split(', ')))
+        elif a0.key() == 16777268:
+            self.update_messages(None)
+        elif a0.key() == 16777220:
+            self.send(None)
 
     def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
