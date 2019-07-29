@@ -1,6 +1,5 @@
 import random
 import math
-import socket
 
 
 def check(x, y):
@@ -119,7 +118,7 @@ primes = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 7
           1877, 1879, 1889, 1901, 1907, 1913, 1931, 1933, 1949, 1951, 1973, 1979, 1987, 1993, 1997, 1999]
 
 
-def get_keys(n, bytes_=1024):
+def get_rsa_keys(n, bytes_=1024):
     def generate():
         p = random.randint(10 ** size, 10 ** (size + 1))
         while not prime(p):
@@ -148,28 +147,41 @@ def get_keys(n, bytes_=1024):
         yield ((e, n), (d, n))
 
 
-# async def get_data():
-#     sock = socket.socket()
-#     while True:
-#         conn, addr = await sock.connect(('192.168.0.111', 1080))
-#         data = await conn.read(1024)
+def prime_(n):
+    if n == 2:
+        return n
+    if n % 2 == 0:
+        return 2
+    for i in range(3, int(n ** 0.5) + 1, 2):
+        if n % i == 0:
+            return i
+    return n
 
 
-# for i in get_keys(1, 32):
-#     peer_encode, decode = i
-# sock = socket.socket()
-# sock.connect(('192.168.0.111', 9087))
-# sock.send(bytes('{} {}'.format(*str(peer_encode)[1:-1].split(', ')), encoding='utf-8'))
-#
-# data = sock.recv(1024)
-# sock.close()
-#
-# encode = tuple(map(int, str(data)[2:-1].split()))
-# print(encode)
+def factorize(n):
+    result = n
+    primes = set()
+    while result != 1:
+        x = prime_(result)
+        primes.add(x)
+        result //= x
+    return primes
 
-for i in get_keys(1, 1024):
-    encode, decode = i
-encoded = encode_function(input(), *encode)
-print(encoded)
-decoded = decode_function(encoded, *decode)
-print(decoded)
+
+def get_rc4_keys(size, modulo=4):
+    p = random.randint(10 ** size, 10 ** (size + 1))
+    while not prime(p) or p % modulo != 3:
+        p = random.randint(10 ** size, 10 ** (size + 1))
+    q = random.randint(10 ** size, 10 ** (size + 1))
+    while not prime(q) or q % modulo != 3 or p == q:
+        q = random.randint(10 ** size, 10 ** (size + 1))
+    return p, q
+
+
+def n_keys(p, q, prev=None, pair=None):
+    assert (prev is None) ^ (pair is None)
+    if prev is None:
+        return pow(pair[0], pow(2, pair[1], (p - 1) * (q - 1)), p * q)
+    else:
+        return pow(prev, 2, p * q)
+
