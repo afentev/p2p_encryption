@@ -3,14 +3,14 @@
 # TODO: add address book with MAC-IP  (done, tests)
 # TODO: improve work with window size (depends on screen)
 
-import socket
-import sys
+import ast
 import os
+import socket
 import subprocess
+import sys
 
+import rsa
 from PyQt5 import QtCore, QtGui, QtWidgets
-
-import crypto
 
 
 class NewAddressToBook(QtWidgets.QDialog):
@@ -228,17 +228,19 @@ class Example(QtWidgets.QMainWindow):
         self.close_connection()
 
     def show_(self):
-        for i in self.string.split('\\n'):
-            self.statusbar.showMessage('Decoding...')
-            if i:
-                i = crypto.decode_function(i, *self.decode_send)
-                self.textBrowser.append('{}: {}'.format(str(self.addr), i))
-                self.statusbar.showMessage('')
+        i = self.string
+        self.statusbar.showMessage('Decoding...')
+        if i:
+            i = repr(i)
+            i = ast.literal_eval(ast.literal_eval(i))
+            i = rsa.decrypt(i, self.decode_send).decode('utf8')
+            self.textBrowser.append('{}: {}'.format(str(self.addr), i))
+            self.statusbar.showMessage('')
         self.string = ''
 
     def stack(self):
         try:
-            message = self.conn.recv(1024).decode('utf-8')
+            message = self.conn.recv(1024)
             if message:
                 self.string += str(message)
         except BlockingIOError:
@@ -259,9 +261,10 @@ class Example(QtWidgets.QMainWindow):
             if self.connected:
                 self.statusbar.showMessage('Sending...')
                 text = self.lineEdit.text()
-                encrypted = crypto.encode_function(text, *self.encode_send)
+                print(self.encode_send)
+                encrypted = rsa.encrypt(text.encode('UTF-8'), self.encode_send)
                 print(encrypted)
-                self.sock_send.send(bytes(encrypted + '\n', encoding='UTF-8'))
+                self.sock_send.send(encrypted)
                 self.lineEdit.setText('')
                 self.textBrowser.append('me: {}'.format(text))
                 self.statusbar.showMessage('Success.', 5000)
@@ -295,9 +298,8 @@ class Example(QtWidgets.QMainWindow):
                     self.sock_send = socket.socket()
                     self.sock_send.connect(('localhost' if receiver_ip == '127.0.0.1' else receiver_ip, receiver_port))
             self.statusbar.showMessage('Connection is established. Exchanging keys...')
-            q = [i for i in crypto.get_rsa_keys(1, 1024)]
-            encode_send, self.decode_send = q[0]
-            self.sock_send.send(bytes(str(encode_send), encoding='UTF-8'))
+            encode_send, self.decode_send = rsa.newkeys(512)
+            self.sock_send.send(bytes(str(encode_send)[9:], encoding='UTF-8'))
             string = ''
             while True:
                 try:
@@ -306,7 +308,8 @@ class Example(QtWidgets.QMainWindow):
                 except BlockingIOError:
                     break
                 string += str(data)[2:-1]
-            self.encode_send = tuple(map(int, string[1:-1].split(', ')))
+            keys = tuple(map(int, string[1:-1].split(', ')))
+            self.encode_send = rsa.key.PublicKey(keys[0], keys[1])
             self.statusbar.showMessage('Ok.', 5000)
             self.connected = True
             self.conn.setblocking(False)
