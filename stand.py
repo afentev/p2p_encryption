@@ -4,15 +4,14 @@
 # TODO: improve work with window size (depends on screen)
 
 import ast
+import os
 import socket
 import sys
+import time
 
 import rsa
-import zmq
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-from cryptography.hazmat.primitives.ciphers import Cipher, modes
-from cryptography.hazmat.backends import default_backend
 from PyQt5 import QtCore, QtGui, QtWidgets
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 import msgLib
 
@@ -59,7 +58,7 @@ class Example(QtWidgets.QMainWindow):
         if i:
             i = repr(i)
             i = ast.literal_eval(ast.literal_eval(i))
-            i = rsa.decrypt(i, self.decode_send).decode('utf8')
+            i = self.decode_chacha.decrypt(self.decode_nonce, i, self.decode_aad).decode('utf8')
             self.textBrowser.append('{}: {}'.format(str(self.addr), i))
             self.statusbar.showMessage('')
         self.string = ''
@@ -76,20 +75,16 @@ class Example(QtWidgets.QMainWindow):
             er = QtWidgets.QErrorMessage(self)
             er.showMessage('Connection was closed, disconnecting :(')
             er.show()
-            print(1111111)
         finally:
             if self.connected:
                 QtCore.QTimer.singleShot(1, self.stack)
 
     def send(self, arg):
         try:
-            print(self.connected)
             if self.connected:
                 self.statusbar.showMessage('Sending...')
                 text = self.lineEdit.text()
-                print(self.encode_send)
-                encrypted = rsa.encrypt(text.encode('UTF-8'), self.encode_send)
-                print(encrypted)
+                encrypted = self.encode_chacha.encrypt(self.encode_nonce, text.encode('utf8'), self.encode_aad)
                 self.sock_send.send(encrypted)
                 self.lineEdit.setText('')
                 self.textBrowser.append('me: {}'.format(text))
@@ -98,7 +93,6 @@ class Example(QtWidgets.QMainWindow):
             self.statusbar.showMessage('Error. Connection was not established.')
 
     def connect_to_active_socket(self, receiver_ip, receiver_port, current_port):
-        # NWPCK;LNGTH=4096;REQ=KEYEXCH;
         # NWPCK;LNGTH=4096;REQ=MSG;
         # NWPCK;LNGTH=4096;REQ=AADUPD;
         self.sock_send = socket.socket()
@@ -127,7 +121,7 @@ class Example(QtWidgets.QMainWindow):
                     self.sock_send = socket.socket()
                     self.sock_send.connect(('localhost' if receiver_ip == '127.0.0.1' else receiver_ip, receiver_port))
             self.statusbar.showMessage('Connection is established. Exchanging keys...')
-            encode_send, self.decode_send = rsa.newkeys(512)
+            encode_send, self.decode_send = rsa.newkeys(2048)
             self.sock_send.send(bytes(str(encode_send)[9:], encoding='UTF-8'))
             string = ''
             while True:
@@ -139,6 +133,33 @@ class Example(QtWidgets.QMainWindow):
                 string += str(data)[2:-1]
             keys = tuple(map(int, string[1:-1].split(', ')))
             self.encode_send = rsa.key.PublicKey(keys[0], keys[1])
+
+            self.encode_aad = os.urandom(32)
+            self.encode_key = ChaCha20Poly1305.generate_key()
+            # self.nonce = bytes(str(os.urandom(16)), encoding='utf8')
+            self.encode_nonce = os.urandom(12)
+            self.encode_chacha = ChaCha20Poly1305(self.encode_key)
+            text = str(self.encode_aad) + '``' + str(self.encode_nonce) + '``' + str(self.encode_key)
+            encrypted = rsa.encrypt(text.encode('UTF-8'), self.encode_send)
+            self.sock_send.send(encrypted)
+            string = ''
+            time.sleep(1)
+            while True:
+                try:
+                    self.conn.setblocking(False)
+                    data = self.conn.recv(1024)
+                except BlockingIOError:
+                    break
+                string += str(data)
+            string = repr(string)
+            string = ast.literal_eval(ast.literal_eval(string))
+            string = rsa.decrypt(string, self.decode_send).decode('utf8')
+            self.decode_aad, self.decode_nonce, self.decode_key = string.split('``')
+            self.decode_aad,  self.decode_nonce, self.decode_key = (ast.literal_eval(self.decode_aad),
+                                                                    ast.literal_eval(self.decode_nonce),
+                                                                    ast.literal_eval(self.decode_key))
+            self.decode_chacha = ChaCha20Poly1305(self.decode_key)
+
             self.statusbar.showMessage('Ok.', 5000)
             self.connected = True
             self.conn.setblocking(False)
