@@ -195,5 +195,6 @@ def byteinc(byte):
     for index in range(len(byte) - 1, -1, -1):
         if byte[index] != 255:
             byte[index] += 1
-            return byte
-    return bytearray(12)
+            break
+        byte[index] = 0
+    return byte
