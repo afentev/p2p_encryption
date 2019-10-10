@@ -164,7 +164,8 @@ class Example(QtWidgets.QMainWindow):
                             self.conn.setblocking(False)
                     except BlockingIOError:
                         break
-                    string += data
+                    finally:
+                        string += data
             string = repr(string)
             string = ast.literal_eval(ast.literal_eval(string))
             string = rsa.decrypt(string, self.decode_send).decode('utf8')
