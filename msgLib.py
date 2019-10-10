@@ -189,3 +189,11 @@ def initialize(self):
     self.retranslateUi()
 
     self.pushButton_2.clicked.connect(self.send)
+
+
+def byteinc(byte):
+    for index in range(len(byte) - 1, -1, -1):
+        if byte[index] != 255:
+            byte[index] += 1
+            return byte
+    return bytearray(12)

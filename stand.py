@@ -60,6 +60,7 @@ class Example(QtWidgets.QMainWindow):
             i = ast.literal_eval(ast.literal_eval(i))
             i = self.decode_chacha.decrypt(self.decode_nonce, i, self.decode_aad).decode('utf8')
             self.textBrowser.append('{}: {}'.format(str(self.addr), i))
+            self.decode_nonce = msgLib.byteinc(self.decode_nonce)
             self.statusbar.showMessage('')
         self.string = ''
 
@@ -85,9 +86,13 @@ class Example(QtWidgets.QMainWindow):
                 self.statusbar.showMessage('Sending...')
                 text = self.lineEdit.text()
                 encrypted = self.encode_chacha.encrypt(self.encode_nonce, text.encode('utf8'), self.encode_aad)
+                print(encrypted)
                 self.sock_send.send(encrypted)
                 self.lineEdit.setText('')
                 self.textBrowser.append('me: {}'.format(text))
+
+                self.encode_nonce = msgLib.byteinc(self.encode_nonce)
+
                 self.statusbar.showMessage('Success.', 5000)
         except AttributeError:
             self.statusbar.showMessage('Error. Connection was not established.')
@@ -140,6 +145,7 @@ class Example(QtWidgets.QMainWindow):
             self.encode_nonce = os.urandom(12)
             self.encode_chacha = ChaCha20Poly1305(self.encode_key)
             text = str(self.encode_aad) + '``' + str(self.encode_nonce) + '``' + str(self.encode_key)
+            self.encode_nonce = bytearray(self.encode_nonce)
             encrypted = rsa.encrypt(text.encode('UTF-8'), self.encode_send)
             self.sock_send.send(encrypted)
             string = ''
@@ -155,9 +161,9 @@ class Example(QtWidgets.QMainWindow):
             string = ast.literal_eval(ast.literal_eval(string))
             string = rsa.decrypt(string, self.decode_send).decode('utf8')
             self.decode_aad, self.decode_nonce, self.decode_key = string.split('``')
-            self.decode_aad,  self.decode_nonce, self.decode_key = (ast.literal_eval(self.decode_aad),
-                                                                    ast.literal_eval(self.decode_nonce),
-                                                                    ast.literal_eval(self.decode_key))
+            self.decode_aad, self.decode_nonce, self.decode_key = (ast.literal_eval(self.decode_aad),
+                                                                   bytearray(ast.literal_eval(self.decode_nonce)),
+                                                                   ast.literal_eval(self.decode_key))
             self.decode_chacha = ChaCha20Poly1305(self.decode_key)
 
             self.statusbar.showMessage('Ok.', 5000)
