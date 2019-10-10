@@ -7,7 +7,6 @@ import ast
 import os
 import socket
 import sys
-import time
 
 import rsa
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -127,15 +126,18 @@ class Example(QtWidgets.QMainWindow):
                     self.sock_send.connect(('localhost' if receiver_ip == '127.0.0.1' else receiver_ip, receiver_port))
             self.statusbar.showMessage('Connection is established. Exchanging keys...')
             encode_send, self.decode_send = rsa.newkeys(2048)
-            self.sock_send.send(bytes(str(encode_send)[9:], encoding='UTF-8'))
-            string = ''
-            while True:
-                try:
-                    data = self.conn.recv(1024)
-                    self.conn.setblocking(False)
-                except BlockingIOError:
-                    break
-                string += str(data)[2:-1]
+            self.sock_send.send(bytes(str(encode_send)[9:], encoding='UTF-8') + b'END')
+            string = str(self.conn.recv(1024))[2:-1]
+            if 'END' in string:
+                string = string.replace('END', '')
+            else:
+                while True:
+                    data = str(self.conn.recv(1024))[2:-1]
+                    if 'END' in data:
+                        data = data.replace('END', '')
+                        string += data
+                        break
+                    string += data
             keys = tuple(map(int, string[1:-1].split(', ')))
             self.encode_send = rsa.key.PublicKey(keys[0], keys[1])
 
@@ -147,16 +149,22 @@ class Example(QtWidgets.QMainWindow):
             text = str(self.encode_aad) + '``' + str(self.encode_nonce) + '``' + str(self.encode_key)
             self.encode_nonce = bytearray(self.encode_nonce)
             encrypted = rsa.encrypt(text.encode('UTF-8'), self.encode_send)
-            self.sock_send.send(encrypted)
-            string = ''
-            time.sleep(1)
-            while True:
-                try:
-                    self.conn.setblocking(False)
-                    data = self.conn.recv(1024)
-                except BlockingIOError:
-                    break
-                string += str(data)
+            self.sock_send.send(encrypted + b'END')
+
+            string = str(self.conn.recv(1024))
+            if 'END' in string:
+                string = string.replace('END', '')
+                self.conn.setblocking(False)
+            else:
+                while True:
+                    try:
+                        data = str(self.conn.recv(1024))
+                        if 'END' in data:
+                            data = data.replace('END', '')
+                            self.conn.setblocking(False)
+                    except BlockingIOError:
+                        break
+                    string += data
             string = repr(string)
             string = ast.literal_eval(ast.literal_eval(string))
             string = rsa.decrypt(string, self.decode_send).decode('utf8')
